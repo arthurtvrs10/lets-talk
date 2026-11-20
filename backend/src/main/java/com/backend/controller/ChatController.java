@@ -1,6 +1,6 @@
 package com.backend.controller;
 
-import com.backend.config.ChatMessage;
+import com.backend.model.ChatMessage;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
