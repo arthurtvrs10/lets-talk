@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Let's Talk</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            max-width: 640px;
+            margin: 40px auto;
+            padding: 0 16px;
+            background: #f4f7f5;
+            color: #19352c;
+            font: 16px/1.5 Arial, sans-serif;
+        }
+
+        header, form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+
+        header { justify-content: space-between; }
+        form { align-items: end; }
+        label { display: grid; flex: 1; gap: 4px; }
+
+        input, button {
+            padding: 10px 12px;
+            border-radius: 6px;
+            font: inherit;
+        }
+
+        input { width: 100%; border: 1px solid #99aaa2; }
+        button { border: 0; background: #176149; color: white; cursor: pointer; }
+        button:disabled { opacity: 0.4; cursor: default; }
+        #desconectar { background: #713d3d; }
+
+        #status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        #status[data-estado="offline"] { background: #f8dfdf; color: #862d2d; }
+        #status[data-estado="conectando"] { background: #fff0c4; color: #725000; }
+        #status[data-estado="online"] { background: #d6f2e3; color: #125237; }
+
+        #mensagens {
+            height: 260px;
+            padding: 14px;
+            overflow-y: auto;
+            border: 1px solid #c4d3cb;
+            border-radius: 8px;
+            background: white;
+            list-style: none;
+        }
+
+        #mensagens li { padding: 5px 0; overflow-wrap: anywhere; }
+    </style>
+</head>
+
+<body>
+<header>
+    <h1>Let's Talk</h1>
+    <span id="status" data-estado="offline" role="status">Offline</span>
+</header>
+
+<form id="formConexao">
+    <label>
+        Seu nome
+        <input id="nome" placeholder="Ana" maxlength="40" required>
+    </label>
+
+    <label>
+        Sala
+        <input id="sala" value="geral" pattern="[a-zA-Z0-9_\-]+"
+               title="Use letras sem acento, números, hífen ou sublinhado." required>
+    </label>
+
+    <button id="conectar" type="submit">Conectar</button>
+    <button id="desconectar" type="button" disabled>Desconectar</button>
+</form>
+
+<p id="aviso" aria-live="polite">Escolha um nome e uma sala para conectar.</p>
+
+<ul id="mensagens" aria-label="Mensagens da sala" aria-live="polite"></ul>
+
+<form id="formMensagem">
+    <label>
+        Mensagem
+        <input id="mensagem" placeholder="Digite sua mensagem"
+               autocomplete="off" required disabled>
+    </label>
+
+    <button id="enviar" type="submit" disabled>Enviar</button>
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.1.1/bundles/stomp.umd.min.js"></script>
+
+<script>
+    const elemento = id => document.getElementById(id);
+    const endpoint = "http://localhost:8080/ws";
+
+    const textosStatus = {
+        offline: "Offline",
+        conectando: "Conectando…",
+        online: "Online"
+    };
+
+    let cliente = null;
+
+    function atualizarTela(estado, aviso) {
+        const offline = estado === "offline";
+        const online = estado === "online";
+
+        elemento("status").dataset.estado = estado;
+        elemento("status").textContent = textosStatus[estado];
+        elemento("aviso").textContent = aviso;
+
+        elemento("nome").disabled = !offline;
+        elemento("sala").disabled = !offline;
+        elemento("conectar").disabled = !offline;
+        elemento("desconectar").disabled = offline;
+        elemento("mensagem").disabled = !online;
+        elemento("enviar").disabled = !online;
+    }
+
+    function desconectar(aviso) {
+        const sessaoAnterior = cliente;
+        cliente = null;
+        atualizarTela("offline", aviso);
+
+        if (sessaoAnterior) {
+            sessaoAnterior.deactivate();
+        }
+    }
+
+    function mostrarMensagem(quadro) {
+        const mensagem = JSON.parse(quadro.body);
+        const item = document.createElement("li");
+        item.textContent = `${mensagem.from}: ${mensagem.content}`;
+
+        const lista = elemento("mensagens");
+        lista.appendChild(item);
+        lista.scrollTop = lista.scrollHeight;
+    }
+
+    elemento("formConexao").addEventListener("submit", evento => {
+        evento.preventDefault();
+        if (cliente) return;
+
+        const nome = elemento("nome").value.trim();
+        const sala = elemento("sala").value.trim();
+
+        if (!nome) {
+            atualizarTela("offline", "Digite seu nome para conectar.");
+            elemento("nome").focus();
+            return;
+        }
+
+        if (!window.SockJS || !window.StompJs) {
+            atualizarTela("offline", "Confira a conexão com a internet e recarregue a página.");
+            return;
+        }
+
+        const sessao = new StompJs.Client({
+            webSocketFactory: () => new SockJS(endpoint),
+            reconnectDelay: 0,
+            connectionTimeout: 8000
+        });
+
+        cliente = sessao;
+        atualizarTela("conectando", "Aguardando resposta do servidor…");
+
+        // Só mostra Online depois que o Spring confirma a conexão STOMP.
+        sessao.onConnect = () => {
+            if (cliente !== sessao) return;
+
+            elemento("mensagens").replaceChildren();
+            sessao.subscribe("/topic/horario", quadro => {
+                if (cliente !== sessao) return;
+
+                const { horario } = JSON.parse(quadro.body);
+                const item = document.createElement("li");
+                item.textContent = `Horário do servidor: ${horario}`;
+
+                const lista = elemento("mensagens");
+                lista.appendChild(item);
+                lista.scrollTop = lista.scrollHeight;
+            });
+
+            sessao.subscribe(`/topic/chat/${sala}`, quadro => {
+                if (cliente === sessao) mostrarMensagem(quadro);
+            });
+
+            atualizarTela("online", `${nome} está na sala ${sala}.`);
+            elemento("mensagem").focus();
+        };
+
+        sessao.onStompError = quadro => {
+            if (cliente !== sessao) return;
+            desconectar(quadro.headers.message || "O servidor encerrou a sessão.");
+        };
+
+        sessao.onWebSocketClose = () => {
+            if (cliente !== sessao) return;
+            desconectar("Conexão encerrada. Confira se o backend está na porta 8080.");
+        };
+
+        sessao.activate();
+    });
+
+    elemento("desconectar").addEventListener("click", () => {
+        desconectar("Você se desconectou da sala.");
+    });
+
+    elemento("formMensagem").addEventListener("submit", evento => {
+        evento.preventDefault();
+
+        const campo = elemento("mensagem");
+        const texto = campo.value.trim();
+        if (!cliente?.connected || !texto) return;
+
+        cliente.publish({
+            destination: `/app/chat.send/${elemento("sala").value}`,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                from: elemento("nome").value.trim(),
+                content: texto
+            })
+        });
+
+        campo.value = "";
+        campo.focus();
+    });
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@ Projeto de estudo em Java 21 e Spring Boot para construir um chat em tempo real 
 
 Marque cada etapa com `[x]` depois de demonstrar a conquista. A primeira meta é chegar à etapa 3 e conversar entre duas abas.
 
-- [ ] **1. Colocar o backend no ar**  
+- [x] **1. Colocar o backend no ar**  
   Crie o backend com Java 21, Spring Boot, Maven e Spring Web MVC. Implemente `GET /api/status`.  
   **Conquista:** abra `http://localhost:8080/api/status` no navegador e veja `{"status":"online"}`.
 
