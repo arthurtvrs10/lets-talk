@@ -12,7 +12,7 @@ Marque cada etapa com `[x]` depois de demonstrar a conquista. A primeira meta é
   Crie o backend com Java 21, Spring Boot, Maven e Spring Web MVC. Implemente `GET /api/status`.  
   **Conquista:** abra `http://localhost:8080/api/status` no navegador e veja `{"status":"online"}`.
 
-- [ ] **2. Receber a primeira mensagem do servidor**  
+- [x] **2. Receber a primeira mensagem do servidor**  
   Configure WebSocket com STOMP no endpoint `/ws`. Crie uma página HTML com um botão **Conectar** e faça o servidor publicar o horário a cada cinco segundos em um tópico de teste.  
   **Conquista:** clique uma única vez em **Conectar** e veja três horários chegarem sem atualizar a página.
 
